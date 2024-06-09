@@ -1,0 +1,58 @@
+name: Deploy to ECS with Terraform (Local Backend)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  terraform-init:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Initialize Terraform (local backend)
+      run: |
+        terraform init
+
+  terraform-plan:
+    runs-on: ubuntu-latest
+    needs: terraform-init
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Apply Terraform changes (if main branch)
+      if: github.event.branch == 'main'
+      run: |
+        terraform plan
+
+  terraform-apply:
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Apply Terraform changes (if main branch)
+      if: github.event.branch == 'main'
+      run: |
+        terraform apply
+
+  ecs-service-update:
+    runs-on: ubuntu-latest
+    needs: terraform-apply  # Wait for Terraform to finish before updating
+    steps:
+    - uses: actions/checkout@v3
+
+    - name:${{ env.ECS_SERVICE_ARN }}
+      uses: aws-actions/aws-ecs-run-task@v1.2.0
+      with:
+        aws-region: ${{ env.AWS_REGION }}
+        cluster: ${{ env.ECS_CLUSTER_NAME }}
+        task-definition: ${{ env.ECS_TASK_DEFINATION_ARN }}
+        launchType: FARGATE
+        # Update the following line with the actual image from Docker Hub
+        image: ashishkr3246/hello-world:latest
+        overrides:
+          containerOverrides:
+            - name: hello-world
+              command: ["/app/index.js"]
+        wait-for-task-success: true
